@@ -75,7 +75,7 @@ def send_orders_to_kafka(batch_size=50, continuous=False):
             producer.send(TOPIC_NAME, value=order)
             logging.info(f"Sent order: {order['order_id']} to topic: {TOPIC_NAME}")
 
-        producer.flush()  # flush after each batch
+        producer.flush()  
         logging.info(f"Batch of {batch_size} records flushed to topic: {TOPIC_NAME}")
 
         if rec >= 5000 and not continuous:
@@ -89,3 +89,7 @@ def send_orders_to_kafka(batch_size=50, continuous=False):
 # ======= Entry Point ============
 def main():
     send_orders_to_kafka(batch_size=50, continuous=True)
+
+
+if __name__ == "__main__":
+    main()
