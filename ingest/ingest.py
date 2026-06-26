@@ -2,14 +2,16 @@ import pandas as pd
 from kafka import KafkaConsumer
 from collections import deque
 import json
+from dotenv import load_dotenv
 import logging
 
+load_dotenv()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 KAFKA_BROKER = 'kafka.dedamdata.org:9092'
 TOPIC_NAME   = 'orders_gadgets'
 GROUP_ID     = 'orders-consumer-group'
-BATCH_SIZE   = 100
+BATCH_SIZE   = 1000
 
 
 def _build_consumer() -> KafkaConsumer:
@@ -20,6 +22,7 @@ def _build_consumer() -> KafkaConsumer:
         auto_offset_reset='earliest',
         enable_auto_commit=True,
         auto_commit_interval_ms=1000,
+        consumer_timeout_ms=30_000,
         value_deserializer=lambda x: json.loads(x.decode('utf-8'))
     )
 
@@ -50,3 +53,11 @@ def run() -> pd.DataFrame:
         raise RuntimeError("No messages consumed — topic may be empty or offset already at end.")
 
     return _flush(buffer)
+
+#========= Function to load data to staging table =============
+
+def load_to_stg(df: pd.DataFrame, conn, logger):
+    try:
+        df.to_sql('stg_orders', con=conn, if_exists='append', index=False)
+    except Exception as e:
+        logger.error(f"Error occurred while loading data to staging: {e}")

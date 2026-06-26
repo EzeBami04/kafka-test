@@ -2,6 +2,10 @@ faker
 pandas
 numpy
 kafka-python
+confluent-kafka
 pyspark
 sqlalchemy
 psycopg2-binary
+python-dotenv
+openpyxl
+requests

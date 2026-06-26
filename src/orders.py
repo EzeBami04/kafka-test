@@ -5,6 +5,7 @@ import json
 import time
 
 # ========== Config =============
+
 fake = Faker()
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -12,8 +13,7 @@ KAFKA_BROKER = 'kafka.dedamdata.org:9092'
 TOPIC_NAME = 'orders_gadgets'
 
 producer = KafkaProducer(
-    bootstrap_servers=KAFKA_BROKER, enable_idempotence=True, value_serializer=lambda v: json.dumps(v).encode('utf-8')
-)
+    bootstrap_servers=KAFKA_BROKER, enable_idempotence=True, value_serializer=lambda v: json.dumps(v).encode('utf-8'))
 
 # ====== Generate Order records ============
 
@@ -54,7 +54,7 @@ def generate_single_order():
         'payment_method': fake.random_element(elements=['credit_card', 'cash', 'bank_transfer'])
     }
 
-def orders(n=5000):
+def orders(n=100000):
     """Generates n unique order records."""
     return [generate_single_order() for _ in range(n)]
 
@@ -78,18 +78,16 @@ def send_orders_to_kafka(batch_size=50, continuous=False):
         producer.flush()  
         logging.info(f"Batch of {batch_size} records flushed to topic: {TOPIC_NAME}")
 
-        if rec >= 5000 and not continuous:
+        if rec >= 10000 and not continuous:
             break
 
-        time.sleep(5)  # wait 5 seconds before next batch
+        time.sleep(5)
 
     logging.info("Done sending orders.")
 
 
-# ======= Entry Point ============
 def main():
-    send_orders_to_kafka(batch_size=50, continuous=True)
-
+    send_orders_to_kafka(batch_size=100, continuous=False)
 
 if __name__ == "__main__":
     main()

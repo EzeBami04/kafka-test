@@ -1,8 +1,5 @@
 # ================ transforms.py ================
 import pandas as pd
-from psycopg2.extras import execute_values
-
-
 
 
 def dim_cust(df: pd.DataFrame) -> pd.DataFrame:
@@ -48,8 +45,8 @@ def dim_location(df: pd.DataFrame) -> pd.DataFrame:
     loc = df[['region', 'city', 'zip_code']].drop_duplicates().copy()
     loc['location_id'] = (
         loc['region'] + loc['city'] + loc['zip_code']
-    ).apply(lambda x: abs(hash(x)) % (10 ** 9))   # stable int surrogate key
-    loc['country'] = 'US'                           # Faker default is US state
+    ).apply(lambda x: abs(hash(x)) % (10 ** 9))
+    loc['country'] = 'US'                           
     return loc[[
         'location_id', 'country', 'region', 'city', 'zip_code'
     ]].rename(columns={'region': 'state'})

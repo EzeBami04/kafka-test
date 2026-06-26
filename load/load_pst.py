@@ -1,7 +1,8 @@
 import pandas as pd
 from psycopg2.extras import execute_values
 
-def load_dim_cust(df: pd.DataFrame, conn) -> None:
+def load_dim_cust(df: pd.DataFrame, conn, logger) -> None:
+    logger.info(f"Loading rows into dim_customers")
     rows = list(df.itertuples(index=False, name=None))
     sql = """
         INSERT INTO dim_customers (cust_id, cust_name, cust_email, cust_phone, cust_seg, is_ret_cust)
@@ -18,7 +19,8 @@ def load_dim_cust(df: pd.DataFrame, conn) -> None:
     conn.commit()
 
 
-def load_dim_date(df: pd.DataFrame, conn) -> None:
+def load_dim_date(df: pd.DataFrame, conn, logger) -> None:
+    logger.info(f"Loading rows into dim_date")
     rows = list(df.itertuples(index=False, name=None))
     sql = """
         INSERT INTO dim_date (date_id, date, day, month, year, quarter)
@@ -31,7 +33,8 @@ def load_dim_date(df: pd.DataFrame, conn) -> None:
     conn.commit()
 
 
-def load_dim_prod(df: pd.DataFrame, conn) -> None:
+def load_dim_prod(df: pd.DataFrame, conn, logger) -> None:
+    logger.info(f"Loading rows into dim_products")
     rows = list(df.itertuples(index=False, name=None))
     sql = """
         INSERT INTO dim_products (prod_id, item_ordered, category, brand, sku)
@@ -47,7 +50,8 @@ def load_dim_prod(df: pd.DataFrame, conn) -> None:
     conn.commit()
 
 
-def load_dim_location(df: pd.DataFrame, conn) -> None:
+def load_dim_location(df: pd.DataFrame, conn, logger) -> None:
+    logger.info("Loading rows into dim_location")
     rows = list(df.itertuples(index=False, name=None))
     sql = """
         INSERT INTO dim_location (location_id, country, state, city, zip_code)
@@ -59,7 +63,8 @@ def load_dim_location(df: pd.DataFrame, conn) -> None:
     conn.commit()
 
 
-def load_fact_orders(df: pd.DataFrame, conn) -> None:
+def load_fact_orders(df: pd.DataFrame, conn, logger) -> None:
+    logger.info("Loading rows into fact_orders")
     rows = list(df.itertuples(index=False, name=None))
     sql = """
         INSERT INTO fact_orders (
