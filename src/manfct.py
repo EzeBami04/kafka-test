@@ -1,13 +1,127 @@
 from faker import Faker
 import random
 import pandas as pd
+import psycopg2
+from sqlalchemy import create_engine
+import pandas_gbq as pdq
+from dotenv import load_dotenv
 import os
 
 fake = Faker()
-
+load_dotenv()
 random.seed(42)
 Faker.seed(42)
+#================================= config ==========================================
+host = os.getenv("host")
+port = os.getenv("port")
+database = os.getenv("database")
+user = os.getenv("aiven_user")
+password = os.getenv("aiven_password")
 
+def connect_database():
+    """
+    connect to Postgres
+    """
+    
+    conn = psycopg2.connect(
+        host=host,
+        database=database,
+        user=user,
+        password=password,
+        port=port,
+        sslmode="require"
+        )
+    return conn
+
+def create_postgres_engine():
+
+    connection_string = (
+        f"postgresql+psycopg2://"
+        f"{user}:{password}@{host}:{port}/{database}"
+    )
+
+    engine = create_engine(connection_string)
+
+    return engine
+
+def create_postgres_schema():
+
+    conn = connect_database()
+
+    try:
+
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            CREATE SCHEMA IF NOT EXISTS staging;
+        """)
+
+        conn.commit()
+
+        cursor.close()
+
+        print("PostgreSQL staging schema ready.")
+
+    finally:
+
+        conn.close()
+#===========================================================================================
+#       Postgres and Bigquery helpers
+#========================================================================================
+
+def load_postgres(
+    df: pd.DataFrame,
+    table_name: str
+    ):
+    """
+    Load DataFrame into PostgreSQL staging.
+    """
+
+
+    engine = create_postgres_engine()
+
+    try:
+
+        df.to_sql(
+            name=table_name, con=engine, schema="staging", if_exists="append", index=False,
+            chunksize=5000, method="multi")
+
+        print(
+            f"PostgreSQL: loaded "
+            f"{len(df):,} rows into "
+            f"staging.{table_name}"
+        )
+
+    finally:
+        engine.dispose()
+
+def load_bq(
+    df: pd.DataFrame,
+    table_name: str
+):
+
+    project_id = os.getenv("gcp_id")
+    svc_key = os.getenv("gcp_sa_key")
+    dataset = os.getenv("dataset")
+
+    os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = svc_key
+
+    destination = f"{dataset}.{table_name}"
+
+    pdq.to_gbq(
+        dataframe=df,
+        destination_table=destination,
+        project_id=project_id,
+        if_exists="append",
+        location="europe-west9"
+        )
+
+    print(
+        f"BigQuery: loaded "
+        f"{len(df):,} rows into "
+        f"{destination}"
+    )
+#===============================================================================================
 PRODUCTS = [
     ("PRD-001", "Steel Bolt", "Fasteners", 120),
     ("PRD-002", "Steel Nut", "Fasteners", 90),
@@ -393,77 +507,179 @@ def generate_inventory_movements(n=100_000):
 
 
 
-def generate_in_chunks(generator_function, total_records,
-                       chunk_size=50_000):
-
-    os.makedirs("staging", exist_ok=True)
-
+def generate_and_load_in_chunks(
+    generator_function,
+    total_records,
+    load_function,
+    table_name,
+    chunk_size=50_000
+    ):
     for start in range(0, total_records, chunk_size):
 
         current_size = min(
             chunk_size,
             total_records - start
-        )
+            )
+
+        print(
+            f"Generating {table_name}: "
+            f"{start:,} - {start + current_size:,}"
+            )
 
         df = generator_function(current_size)
 
-        file_number = (start // chunk_size) + 1
+        load_function(df, table_name)
 
-        filename = (
-            f"staging/"
-            f"{generator_function.__name__}_"
-            f"{file_number}.csv"
-        )
+        del df
+       
+def load_to_staging(
+    df: pd.DataFrame,
+    table_name: str,
+    postgres=True,
+    bigquery=True
+    ):
 
-        df.to_csv(
-            filename,
-            index=False
-        )
+    if postgres:
 
-        print(
-            f"Generated {current_size:,} records -> {filename}"
-        )
+        load_postgres(
+            df, table_name
+            )
+
+    if bigquery:
+
+        load_bq(
+            df, table_name
+            )
 
 def main():
-    generate_in_chunks(
-    generate_production,
-    300_000
-    )
 
-    generate_in_chunks(
-        generate_quality_checks,
-        200_000
-    )
+    create_postgres_schema()
 
-    generate_in_chunks(
-        generate_material_usage,
-        200_000
-    )
+    # ========================================
+    # MASTER DATA
+    # ========================================
 
-    generate_in_chunks(
-        generate_orders,
-        100_000
-    )
+    # products = generate_products()
 
-    generate_in_chunks(
-        generate_order_items,
-        200_000
-    )
+    # load_to_staging( products, "products")
 
-    # generate_in_chunks(
-    #     generate_shipments,
-    #     100_000
-    # )
+    # customers = generate_customers(5000)
 
-    generate_in_chunks(
-        generate_maintenance,
-        30_000
-    )
+    # load_to_staging(
+    #     customers, "customers"
+    #     )
 
-    generate_in_chunks(
-        generate_inventory_movements,
-        100_000
-    )
+    # employees = generate_employees(500)
+
+    # load_to_staging(
+    #     employees, "employees"
+    #     )
+
+    # # ========================================
+    # # PRODUCTION
+    # # ========================================
+
+    # generate_and_load_in_chunks( generate_production, 300_000,
+    #                             load_to_staging, "production", chunk_size=10_000)
+    # # ========================================
+    # # QUALITY
+    # # ========================================
+
+    generate_and_load_in_chunks(generate_quality_checks, 100_000,
+                                        load_to_staging,
+                                        "quality_checks", chunk_size=10_000
+                                        )
+
+    # ========================================
+    # MATERIAL USAGE
+    # ========================================
+
+    generate_and_load_in_chunks(generate_material_usage, 100_000,
+                                    load_to_staging,
+                                    "material_usage", chunk_size=10_000
+                                    )
+
+
+    # ========================================
+    # ORDERS
+    # ========================================
+
+    generate_and_load_in_chunks(generate_orders, 100_000,
+                                load_to_staging,
+                                "orders", chunk_size=10_000
+                                )
+
+    # ========================================
+    # ORDER ITEMS
+    # ========================================
+
+    generate_and_load_in_chunks(generate_order_items, 100_000,
+                                    load_to_staging,
+                                    "order_items", chunk_size=10_000
+                                    )
+
+    # ========================================
+    # MAINTENANCE
+    # ========================================
+
+    generate_and_load_in_chunks(generate_maintenance, 100_000,
+                                    load_to_staging,
+                                    "maintenance", chunk_size=10_000
+                                    )
+    # ========================================
+    # INVENTORY
+    # ========================================
+
+    generate_and_load_in_chunks(generate_inventory_movements, 100_000,
+                                    load_to_staging,
+                                    "inventory", chunk_size=10_000
+                                    )
+    print("================================\n DATA GENERATION COMPLETE\n STAGING LOAD COMPLETE\n ================================")
+
+
+if __name__ == "__main__":
+    main()
+
+# def main():
+#     generate_in_chunks(
+#     generate_production,
+#     300_000
+#     )
+
+#     generate_in_chunks(
+#         generate_quality_checks,
+#         200_000
+#     )
+
+#     generate_in_chunks(
+#         generate_material_usage,
+#         200_000
+#     )
+
+#     generate_in_chunks(
+#         generate_orders,
+#         100_000
+#     )
+
+#     generate_in_chunks(
+#         generate_order_items,
+#         200_000
+#     )
+
+#     # generate_in_chunks(
+#     #     generate_shipments,
+#     #     100_000
+#     # )
+
+#     generate_in_chunks(
+#         generate_maintenance,
+#         30_000
+#     )
+
+#     generate_in_chunks(
+#         generate_inventory_movements,
+#         100_000
+#     )
 
 if __name__=="__main__":
     main()
