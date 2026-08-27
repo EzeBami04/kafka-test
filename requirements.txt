@@ -9,3 +9,8 @@ psycopg2-binary
 python-dotenv
 openpyxl
 requests
+google-cloud
+google-cloud-storage
+google-oauth
+pyarrow
+azure-storage-client

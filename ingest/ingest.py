@@ -50,7 +50,7 @@ def run() -> pd.DataFrame:
         stream.close()
 
     if not buffer:
-        raise RuntimeError("No messages consumed — topic may be empty or offset already at end.")
+        raise RuntimeError("No messages consumed  topic may be empty or offset already at end.")
 
     return _flush(buffer)
 
